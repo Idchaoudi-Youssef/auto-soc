@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}SOC Dashboard{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% if session.get('logged_in') %}
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-logo">&#9632; SOC<span class="accent">|</span>SOAR</span>
+      <span class="topbar-sub hide-mobile">ANALYST DASHBOARD</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-user hide-mobile">&#9654; {{ username }}</span>
+      <button class="btn-theme" id="theme-toggle" title="Toggle light/dark mode">&#9790;</button>
+      <a href="{{ url_for('logout') }}" class="btn-logout">LOGOUT</a>
+    </div>
+  </header>
+  {% endif %}
+
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    // Theme toggle
+    (function() {
+      const saved = localStorage.getItem('soc-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+      document.getElementById('theme-toggle') && updateIcon(saved);
+    })();
+
+    function updateIcon(theme) {
+      const btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = theme === 'dark' ? '☀' : '☾';
+    }
+
+    document.getElementById('theme-toggle')?.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next    = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('soc-theme', next);
+      updateIcon(next);
+    });
+
+    {% block scripts %}{% endblock %}
+  </script>
+</body>
+</html>
+<!-- Playbook display name filter is handled in templates -->

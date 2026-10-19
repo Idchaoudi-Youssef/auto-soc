@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% block title %}SOC Dashboard — Alerts{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <span class="stat-num">{{ stats.total }}</span>
+      <span class="stat-label">TOTAL</span>
+    </div>
+    <div class="stat-card pending-card">
+      <span class="stat-num">{{ stats.pending }}</span>
+      <span class="stat-label">PENDING</span>
+    </div>
+    <div class="stat-card critical-card">
+      <span class="stat-num">{{ stats.critical }}</span>
+      <span class="stat-label">CRITICAL</span>
+    </div>
+    <div class="stat-card high-card">
+      <span class="stat-num">{{ stats.high }}</span>
+      <span class="stat-label">HIGH</span>
+    </div>
+    <div class="stat-card approved-card">
+      <span class="stat-num">{{ stats.approved }}</span>
+      <span class="stat-label">APPROVED</span>
+    </div>
+    <div class="stat-card rejected-card">
+      <span class="stat-num">{{ stats.rejected }}</span>
+      <span class="stat-label">REJECTED</span>
+    </div>
+    <div class="stat-card inv-card">
+      <span class="stat-num">{{ stats.investigating }}</span>
+      <span class="stat-label">INVESTIGATING</span>
+    </div>
+  </div>
+
+  <!-- Filters + Search -->
+  <div class="filters">
+    <span class="filter-label">FILTER:</span>
+    <button class="filter-btn active" data-status="all">ALL</button>
+    <button class="filter-btn" data-status="pending">PENDING</button>
+    <button class="filter-btn" data-status="investigating">INVESTIGATING</button>
+    <button class="filter-btn" data-status="approved">APPROVED</button>
+    <button class="filter-btn" data-status="rejected">REJECTED</button>
+    <div class="filter-right">
+      <input type="text" id="search-box" class="search-box" placeholder="&#128269; Search ID, agent, rule, IP..."/>
+      <span class="live-dot"></span>
+      <span class="live-label">LIVE</span>
+    </div>
+  </div>
+
+  <!-- Alerts table -->
+  <div class="table-wrap">
+    {% if alerts %}
+    <table class="alerts-table" id="alerts-table">
+      <thead>
+        <tr>
+          <th class="sortable" data-col="0">ID <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="1">TIME <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="2">PLAYBOOK <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="3">AGENT <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="4">RULE <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="5">SEVERITY <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="6">AI <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="7">CONF <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="8">STATUS <span class="sort-icon">⇅</span></th>
+          <th>ACTION</th>
+        </tr>
+      </thead>
+      <tbody id="alerts-tbody">
+        {% for alert in alerts %}
+        <tr class="alert-row"
+            data-status="{{ alert.status }}"
+            data-id="{{ alert.id }}"
+            data-search="{{ (alert.id|string) ~ ' ' ~ (alert.agent_name or '') ~ ' ' ~ (alert.agent_id or '') ~ ' ' ~ (alert.rule_id or '') ~ ' ' ~ (alert.rule_description or '') ~ ' ' ~ (alert.srcip or '') ~ ' ' ~ (alert.playbook or '') ~ ' ' ~ (alert.status or '') }}">
+          <td class="td-id">#{{ alert.id }}</td>
+          <td class="td-time">{{ alert.created_at[:16] if alert.created_at else '—' }}</td>
+          <td class="td-playbook">
+            <span class="playbook-badge pb-{{ alert.playbook }}">{{ alert.playbook|playbook_label }}</span>
+            {% if alert.event_count and alert.event_count > 1 %}
+            <span class="event-count">{{ alert.event_count }} events</span>
+            {% endif %}
+          </td>
+          <td class="td-agent">{{ alert.agent_name or alert.agent_id or '—' }}</td>
+          <td class="td-rule" title="{{ alert.rule_description }}">
+            <span class="rule-id">{{ alert.rule_id or '—' }}</span>
+            <span class="rule-desc">{{ (alert.rule_description or '')[:40] }}{% if alert.rule_description and alert.rule_description|length > 40 %}…{% endif %}</span>
+          </td>
+          <td class="td-sev">
+            <span class="sev-badge sev-{{ alert.severity }}">{{ (alert.severity or '—')|upper }}</span>
+          </td>
+          <td class="td-ai">
+            {% if alert.ai_threat_level %}
+            <span class="ai-threat tl-{{ alert.ai_threat_level }}">{{ alert.ai_threat_level }}</span>
+            {% elif alert.ai_decision %}
+            <span class="ai-threat tl-{{ alert.ai_decision }}">{{ alert.ai_decision }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="td-conf">
+            {% if alert.ai_confidence %}
+            <span class="conf-val {% if alert.ai_confidence >= 80 %}conf-high{% elif alert.ai_confidence >= 50 %}conf-mid{% else %}conf-low{% endif %}">
+              {{ alert.ai_confidence }}%
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="td-status">
+            <span class="status-badge st-{{ alert.status }}">{{ (alert.status or 'pending')|upper }}</span>
+          </td>
+          <td class="td-action">
+            <a href="/alert/{{ alert.id }}" class="btn-view">VIEW &#9654;</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Pagination -->
+    <div class="pagination" id="pagination"></div>
+
+    {% else %}
+    <div class="empty-state">
+      <span class="empty-icon">&#9632;</span>
+      <p>No alerts received yet.</p>
+      <p class="empty-sub">Waiting for Shuffle to push events to <code>/api/alerts</code></p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+const PAGE_SIZE   = 10;
+let currentPage   = 1;
+let currentStatus = 'all';
+let currentSearch = '';
+let sortCol       = -1;
+let sortAsc       = true;
+
+const tbody    = document.getElementById('alerts-tbody');
+const allRows  = tbody ? Array.from(tbody.querySelectorAll('.alert-row')) : [];
+
+// ── Filter buttons ────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentStatus = btn.dataset.status;
+    currentPage   = 1;
+    render();
+  });
+});
+
+// ── Search ────────────────────────────────────────────────────
+const searchBox = document.getElementById('search-box');
+if (searchBox) {
+  searchBox.addEventListener('input', () => {
+    currentSearch = searchBox.value.toLowerCase().trim();
+    currentPage   = 1;
+    render();
+  });
+}
+
+// ── Sorting ───────────────────────────────────────────────────
+document.querySelectorAll('th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = parseInt(th.dataset.col);
+    if (sortCol === col) {
+      sortAsc = !sortAsc;
+    } else {
+      sortCol = col;
+      sortAsc = true;
+    }
+    // Update sort icons
+    document.querySelectorAll('th.sortable').forEach(t => {
+      t.querySelector('.sort-icon').textContent = '⇅';
+      t.classList.remove('sort-active');
+    });
+    th.querySelector('.sort-icon').textContent = sortAsc ? '▲' : '▼';
+    th.classList.add('sort-active');
+    currentPage = 1;
+    render();
+  });
+});
+
+// ── Main render ───────────────────────────────────────────────
+function getVisible() {
+  let rows = allRows.filter(row => {
+    const statusOk = currentStatus === 'all' || row.dataset.status === currentStatus;
+    const searchOk = !currentSearch || row.dataset.search.toLowerCase().includes(currentSearch);
+    return statusOk && searchOk;
+  });
+
+  if (sortCol >= 0) {
+    rows.sort((a, b) => {
+      const at = a.cells[sortCol]?.textContent.trim() || '';
+      const bt = b.cells[sortCol]?.textContent.trim() || '';
+      // numeric sort for ID and CONF cols
+      const an = parseFloat(at.replace(/[^0-9.]/g, ''));
+      const bn = parseFloat(bt.replace(/[^0-9.]/g, ''));
+      if (!isNaN(an) && !isNaN(bn)) return sortAsc ? an - bn : bn - an;
+      return sortAsc ? at.localeCompare(bt) : bt.localeCompare(at);
+    });
+  }
+  return rows;
+}
+
+function render() {
+  const visible = getVisible();
+  const total   = visible.length;
+  const pages   = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  currentPage   = Math.min(currentPage, pages);
+  const start   = (currentPage - 1) * PAGE_SIZE;
+  const end     = start + PAGE_SIZE;
+
+  // Show/hide rows
+  allRows.forEach(r => r.style.display = 'none');
+  visible.forEach((r, i) => {
+    r.style.display = (i >= start && i < end) ? '' : 'none';
+  });
+
+  renderPagination(total, pages);
+}
+
+function renderPagination(total, pages) {
+  const pg = document.getElementById('pagination');
+  if (!pg) return;
+  pg.innerHTML = '';
+
+  if (pages <= 1 && total <= PAGE_SIZE) return;
+
+  const info = document.createElement('span');
+  info.className = 'pg-info';
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end   = Math.min(currentPage * PAGE_SIZE, total);
+  info.textContent = `${start}–${end} of ${total}`;
+  pg.appendChild(info);
+
+  // Prev
+  const prev = document.createElement('button');
+  prev.className = 'pg-btn';
+  prev.textContent = '◀';
+  prev.disabled = currentPage === 1;
+  prev.onclick = () => { currentPage--; render(); };
+  pg.appendChild(prev);
+
+  // Page buttons
+  for (let i = 1; i <= pages; i++) {
+    if (pages > 7 && Math.abs(i - currentPage) > 2 && i !== 1 && i !== pages) {
+      if (i === 2 || i === pages - 1) {
+        const dots = document.createElement('span');
+        dots.className = 'pg-dots';
+        dots.textContent = '…';
+        pg.appendChild(dots);
+      }
+      continue;
+    }
+    const btn = document.createElement('button');
+    btn.className = 'pg-btn' + (i === currentPage ? ' pg-active' : '');
+    btn.textContent = i;
+    btn.onclick = (()=>{ const p=i; return ()=>{ currentPage=p; render(); }; })();
+    pg.appendChild(btn);
+  }
+
+  // Next
+  const next = document.createElement('button');
+  next.className = 'pg-btn';
+  next.textContent = '▶';
+  next.disabled = currentPage === pages;
+  next.onclick = () => { currentPage++; render(); };
+  pg.appendChild(next);
+}
+
+// Initial render
+render();
+
+// Auto-refresh every 30s
+setTimeout(() => location.reload(), 30000);
+{% endblock %}

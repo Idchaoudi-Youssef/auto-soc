@@ -1,0 +1,46 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+  thehive:
+    image: strangebee/thehive:5.2
+    container_name: thehive
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "9000:9000"
+    environment:
+      - JVM_OPTS=-Xms512m -Xmx1536m
+    volumes:
+      - ./data/thehive:/opt/thp/thehive/db
+      - ./data/thehive-files:/opt/thp/thehive/files
+      - ./config/thehive/application.conf:/etc/thehive/application.conf
+    restart: unless-stopped
+  cortex:
+    image: thehiveproject/cortex:3.1.7
+    container_name: cortex
+    ports:
+      - "9001:9001"
+    environment:
+      - JVM_OPTS=-Xms256m -Xmx512m
+      - job_directory=/tmp/cortex-jobs
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/cortex-jobs:/tmp/cortex-jobs
+      - ./data/cortex:/var/db/cortex
+    restart: unless-stopped

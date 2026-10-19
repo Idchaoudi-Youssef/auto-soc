@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}Alert #{{ alert.id }} — SOC Dashboard{% endblock %}
+
+{% block content %}
+<div class="detail-wrap">
+
+  <div class="detail-header">
+    <a href="/" class="btn-back">&#9664; BACK</a>
+    <div class="detail-title">
+      <span class="detail-id">ALERT #{{ alert.id }}</span>
+      {% if alert.severity %}
+      <span class="sev-badge sev-{{ alert.severity }}">{{ alert.severity|upper }}</span>
+      {% endif %}
+      <span class="status-badge st-{{ alert.status }}">{{ (alert.status or 'pending')|upper }}</span>
+      {% if alert.incident_id %}
+      <span class="incident-badge">&#9670; INCIDENT {{ alert.incident_id }}</span>
+      {% endif %}
+    </div>
+    <div class="detail-meta">
+      <span>{{ alert.created_at or '—' }}</span>
+      <span class="playbook-badge pb-{{ alert.playbook }}">{{ alert.playbook|playbook_label }}</span>
+    </div>
+  </div>
+
+  <div class="detail-grid">
+
+    <!-- ═══════════════ LEFT COLUMN ═══════════════ -->
+    <div class="detail-col">
+
+      <!-- Alert context -->
+      <div class="detail-card">
+        <div class="card-title">&#9632; ALERT CONTEXT</div>
+        <div class="kv-grid">
+          <span class="kv-key">Agent ID</span>      <span class="kv-val">{{ alert.agent_id or '—' }}</span>
+          <span class="kv-key">Agent Name</span>    <span class="kv-val">{{ alert.agent_name or '—' }}</span>
+          <span class="kv-key">Rule ID</span>       <span class="kv-val">{{ alert.rule_id or '—' }}</span>
+          <span class="kv-key">Description</span>   <span class="kv-val">{{ alert.rule_description or '—' }}</span>
+          <span class="kv-key">Source IP</span>     <span class="kv-val mono">{{ alert.srcip or '—' }}</span>
+          <span class="kv-key">SHA256</span>        <span class="kv-val mono sha256">{{ alert.sha256 or '—' }}</span>
+        </div>
+      </div>
+
+      <!-- Scoring -->
+      <div class="detail-card">
+        <div class="card-title">&#9632; SCORING</div>
+        <div class="kv-grid">
+          <span class="kv-key">Score</span>       <span class="kv-val">{{ alert.score or '—' }}</span>
+          <span class="kv-key">Severity</span>    <span class="kv-val">
+            {% if alert.severity %}
+            <span class="sev-badge sev-{{ alert.severity }}">{{ alert.severity|upper }}</span>
+            {% else %}—{% endif %}
+          </span>
+          <span class="kv-key">Recommended</span> <span class="kv-val">{{ alert.recommended_action or '—' }}</span>
+        </div>
+        {% if alert.score %}
+        <div class="score-bar-wrap">
+          <div class="score-bar" style="width: {{ [alert.score|int, 100]|min }}%; background: var(--sev-{{ alert.severity or 'low' }})"></div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- TheHive -->
+      {% if alert.thehive_alert_id %}
+      <div class="detail-card">
+        <div class="card-title">&#9632; THEHIVE</div>
+        <a class="btn-hive"
+           href="http://192.168.56.12:9000/alerts/{{ alert.thehive_alert_id }}/details"
+           target="_blank">
+           Open in TheHive &#8599;
+        </a>
+        <p class="kv-val" style="margin-top:8px">Alert ID: <span class="mono">{{ alert.thehive_alert_id }}</span></p>
+      </div>
+      {% endif %}
+
+      <!-- Sibling events (same incident) -->
+      {% if siblings %}
+      <div class="detail-card">
+        <div class="card-title">&#9632; RELATED EVENTS ({{ siblings|length }})</div>
+        <div class="siblings-list">
+          {% for s in siblings %}
+          <a href="/alert/{{ s.id }}" class="sibling-row">
+            <span class="sibling-rule">{{ s.rule_id or '?' }}</span>
+            <span class="sibling-desc">{{ (s.rule_description or '')[:50] }}</span>
+            <span class="sibling-time">{{ (s.created_at or '')[:16] }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+
+    <!-- ═══════════════ RIGHT COLUMN ═══════════════ -->
+    <div class="detail-col">
+
+      <!-- AI Analysis -->
+      <div class="detail-card ai-card">
+        <div class="card-title">&#9632; AI ANALYSIS</div>
+        <div class="kv-grid">
+          <span class="kv-key">Decision</span>
+          <span class="kv-val"><span class="ai-threat tl-{{ alert.ai_decision }}">{{ alert.ai_decision or '—' }}</span></span>
+
+          <span class="kv-key">Threat Level</span>
+          <span class="kv-val"><span class="ai-threat tl-{{ alert.ai_threat_level }}">{{ alert.ai_threat_level or '—' }}</span></span>
+
+          <span class="kv-key">Confidence</span>
+          <span class="kv-val conf-val {% if alert.ai_confidence and alert.ai_confidence >= 80 %}conf-high{% elif alert.ai_confidence and alert.ai_confidence >= 50 %}conf-mid{% else %}conf-low{% endif %}">
+            {% if alert.ai_confidence %}{{ alert.ai_confidence }}%{% else %}—{% endif %}
+          </span>
+
+          {% if ai_extra.attack_pattern %}
+          <span class="kv-key">Attack Pattern</span>
+          <span class="kv-val" style="color: #e67e22; font-weight:600;">{{ ai_extra.attack_pattern }}</span>
+          {% endif %}
+
+          {% if ai_extra.analyst_priority %}
+          <span class="kv-key">Priority</span>
+          <span class="kv-val">
+            <span class="sev-badge sev-{% if ai_extra.analyst_priority == 'P1' %}critical{% elif ai_extra.analyst_priority == 'P2' %}high{% elif ai_extra.analyst_priority == 'P3' %}medium{% else %}low{% endif %}">
+              {{ ai_extra.analyst_priority }}
+            </span>
+          </span>
+          {% endif %}
+
+          {% if ai_extra.events_correlated %}
+          <span class="kv-key">Events Correlated</span>
+          <span class="kv-val">{{ ai_extra.events_correlated }}</span>
+          {% endif %}
+
+          {% if ai_extra.chain_detected is defined %}
+          <span class="kv-key">Chain Detected</span>
+          <span class="kv-val" style="color: {% if ai_extra.chain_detected %}#e74c3c{% else %}#2ecc71{% endif %}">
+            {{ '⚠ YES' if ai_extra.chain_detected else '✓ NO' }}
+          </span>
+          {% endif %}
+        </div>
+
+        {% if ai_extra.mitre_tactics %}
+        <div class="ai-section-label">MITRE TACTICS OBSERVED</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+          {% for tactic in ai_extra.mitre_tactics %}
+          {% set parts = tactic.split(' - ') %}
+          {% if parts|length >= 2 %}
+          <span style="background: rgba(230,126,34,0.15); color:#e67e22; border:1px solid rgba(230,126,34,0.3); padding:2px 8px; border-radius:4px; font-size:0.75rem; font-family:monospace;">
+            <span style="color:#e67e22; font-weight:700;">{{ parts[0] }}</span>
+            <span style="color:var(--text-muted); margin-left:4px;">— {{ parts[1:] | join(' - ') }}</span>
+          </span>
+          {% else %}
+          <span style="background: rgba(230,126,34,0.15); color:#e67e22; border:1px solid rgba(230,126,34,0.3); padding:2px 8px; border-radius:4px; font-size:0.75rem; font-family:monospace;">{{ tactic }}</span>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if alert.ai_summary %}
+        <div class="ai-section-label">SUMMARY</div>
+        <div class="ai-text">{{ alert.ai_summary }}</div>
+        {% endif %}
+
+        {% if alert.ai_reason %}
+        <div class="ai-section-label">REASON</div>
+        <div class="ai-text">{{ alert.ai_reason }}</div>
+        {% endif %}
+
+        {% if ai_extra.recommended_actions %}
+        <div class="ai-section-label">RECOMMENDED ACTIONS</div>
+        <ul style="margin:0; padding-left:18px; color: var(--text-muted); font-size:0.82rem;">
+          {% for action in ai_extra.recommended_actions %}
+          <li style="margin-bottom:4px;">{{ action }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+
+      <!-- Analyst decision -->
+      {% if alert.status == 'pending' or alert.status == 'investigating' %}
+      <div class="detail-card decision-card">
+        <div class="card-title">&#9632; ANALYST DECISION</div>
+        <textarea id="comment-box" class="comment-box" placeholder="Optional comment or justification…"></textarea>
+        <div class="decision-btns">
+
+          {% if alert.playbook == 'block_ip' %}
+          <button class="btn-decision btn-approve" onclick="decide('approve_block_ip')">
+            &#9654; APPROVE BLOCK IP
+          </button>
+
+          {% elif alert.playbook == 'isolate_agent' %}
+          <button class="btn-decision btn-approve" onclick="decide('approve_quarantine')">
+            &#9654; APPROVE QUARANTINE
+          </button>
+
+          {% elif alert.playbook == 'analyst_review' %}
+          <button class="btn-decision btn-approve" onclick="decide('isolate_agent')">
+            &#9654; ISOLATE AGENT
+          </button>
+
+          {% endif %}
+
+          <button class="btn-decision btn-investigate" onclick="decide('mark_investigating')">
+            &#9670; MARK INVESTIGATING
+          </button>
+          <button class="btn-decision btn-reject" onclick="decide('reject')">
+            &#9632; FALSE POSITIVE / REJECT
+          </button>
+        </div>
+        {% if alert.incident_id and siblings %}
+        <p class="incident-note">&#9888; This action will apply to all {{ siblings|length + 1 }} events in this incident.</p>
+        {% endif %}
+        <div id="decision-msg" class="decision-msg"></div>
+      </div>
+
+      {% else %}
+      <div class="detail-card decision-card">
+        <div class="card-title">&#9632; DECISION RECORDED</div>
+        <div class="kv-grid">
+          <span class="kv-key">Decision</span>   <span class="kv-val">{{ alert.analyst_decision or '—' }}</span>
+          <span class="kv-key">Comment</span>    <span class="kv-val">{{ alert.analyst_comment or '—' }}</span>
+          <span class="kv-key">Decided At</span> <span class="kv-val">{{ alert.decided_at or '—' }}</span>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- ═══════════════ ATTACK CHAIN — EVENTS DETAIL (full width) ═══════════════ -->
+  {% if ai_chain_events %}
+  <div class="detail-card" style="margin-top: 1.5rem;">
+    <div class="card-title">&#9632; ATTACK CHAIN — EVENTS DETAIL ({{ ai_chain_events|length }} events)</div>
+    <div style="overflow-x: auto;">
+      <table class="chain-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Timestamp</th>
+            <th>Rule ID</th>
+            <th>Description</th>
+            <th>MITRE Tactic</th>
+            <th>Technique</th>
+            <th>User</th>
+            <th>Significance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ev in ai_chain_events %}
+          <tr>
+            <td class="chain-num">{{ loop.index }}</td>
+            <td class="chain-ts">{{ (ev.timestamp or '—')[:19] }}</td>
+            <td class="chain-rule">{{ ev.rule_id or '—' }}</td>
+            <td class="chain-desc">{{ ev.description or '—' }}</td>
+            <td class="chain-tactic">{{ ev.mitre_tactic or '—' }}</td>
+            <td class="chain-technique">{{ ev.mitre_technique or '—' }}</td>
+            <td class="chain-user">{{ ev.user or '—' }}</td>
+            <td class="chain-sig">{{ ev.significance or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+function decide(decision) {
+  const comment = document.getElementById('comment-box')?.value || '';
+  const msg = document.getElementById('decision-msg');
+  msg.className = 'decision-msg';
+  msg.textContent = 'Sending...';
+
+  fetch('/api/alerts/{{ alert.id }}/decision', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision: decision, comment: comment })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.status === 'ok') {
+      msg.className = 'decision-msg msg-ok';
+      msg.textContent = '✓ Decision recorded: ' + data.new_status.toUpperCase();
+      setTimeout(() => window.location.href = '/', 1500);
+    } else {
+      msg.className = 'decision-msg msg-err';
+      msg.textContent = '✗ Error: ' + (data.error || 'Unknown error');
+    }
+  })
+  .catch(e => {
+    msg.className = 'decision-msg msg-err';
+    msg.textContent = '✗ Request failed: ' + e;
+  });
+}
+{% endblock %}

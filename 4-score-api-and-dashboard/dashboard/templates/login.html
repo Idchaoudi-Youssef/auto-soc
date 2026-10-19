@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SOC Dashboard — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <div class="login-glow"></div>
+    <div class="login-box">
+      <div class="login-brand">
+        <span class="brand-icon">&#9632;</span>
+        <span class="brand-title">SOC<span class="accent">|</span>SOAR</span>
+      </div>
+      <p class="login-subtitle">SECURITY OPERATIONS CENTER</p>
+      <p class="login-subtitle2">Analyst Access Portal</p>
+
+      {% if error %}
+      <div class="login-error">&#9888; {{ error }}</div>
+      {% endif %}
+
+      <form method="POST" action="/login" class="login-form">
+        <div class="field-group">
+          <label>USERNAME</label>
+          <input type="text" name="username" placeholder="analyst" autofocus autocomplete="username"/>
+        </div>
+        <div class="field-group">
+          <label>PASSWORD</label>
+          <input type="password" name="password" placeholder="••••••••" autocomplete="current-password"/>
+        </div>
+        <button type="submit" class="btn-login">AUTHENTICATE &#9654;</button>
+      </form>
+
+      <p class="login-footer">Restricted system — authorized personnel only</p>
+    </div>
+  </div>
+</body>
+</html>

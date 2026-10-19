@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOC Analyst Review</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#060a12;color:#e2e8f0;font-family:'Courier New',monospace;font-size:13px}
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-track{background:#0a0d16}
+  ::-webkit-scrollbar-thumb{background:#2d3748;border-radius:2px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  textarea:focus{outline:none}
+  button:hover{filter:brightness(1.2);cursor:pointer}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+  /* __ALERT_DATA__ */
+  /* __ALERT_ID__ */
+  /* __API_URL__ */
+</script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+const MONO = "'Courier New',monospace";
+
+const SEV = {
+  low:      {fg:"#4ade80",bg:"rgba(74,222,128,.10)",  border:"rgba(74,222,128,.25)"},
+  medium:   {fg:"#fb923c",bg:"rgba(251,146,60,.10)",  border:"rgba(251,146,60,.25)"},
+  high:     {fg:"#f87171",bg:"rgba(248,113,113,.10)", border:"rgba(248,113,113,.25)"},
+  critical: {fg:"#e879f9",bg:"rgba(232,121,249,.10)", border:"rgba(232,121,249,.25)"},
+};
+
+function SectionHead({label, accent="#f59e0b"}) {
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,
+                 paddingBottom:6,borderBottom:"1px solid #1e293b"}}>
+      <div style={{width:3,height:14,background:accent,borderRadius:2}}/>
+      <span style={{fontSize:10,color:accent,letterSpacing:"0.15em",
+                    textTransform:"uppercase",fontWeight:"bold"}}>{label}</span>
+    </div>
+  );
+}
+
+function KV({label,value,vc="#e2e8f0"}) {
+  return (
+    <div style={{display:"flex",gap:8,marginBottom:5,fontSize:12}}>
+      <span style={{color:"#64748b",minWidth:108,flexShrink:0}}>{label}</span>
+      <span style={{color:vc,lineHeight:"1.5"}}>{value}</span>
+    </div>
+  );
+}
+
+function Bar({score,max=20,label,detail}) {
+  const pct = Math.min((score/max)*100,100);
+  const col = score>=15?"#ef4444":score>=10?"#f59e0b":score>=5?"#eab308":"#4ade80";
+  return (
+    <div style={{marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
+        <span style={{color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
+        <span style={{color:col,fontWeight:"bold"}}>{score}/{max}</span>
+      </div>
+      <div style={{height:4,background:"#1e293b",borderRadius:2,overflow:"hidden"}}>
+        <div style={{width:`${pct}%`,height:"100%",background:col,borderRadius:2,
+                     transition:"width 1s ease"}}/>
+      </div>
+      <div style={{fontSize:10,color:"#475569",marginTop:2}}>{detail}</div>
+    </div>
+  );
+}
+
+function AiText({text}) {
+  if (!text) return null;
+  return (
+    <div>
+      {text.split("\n").map((line,i) => {
+        const c = line.trim();
+        if (!c) return <div key={i} style={{height:6}}/>;
+        if (/^\*\*[^*]+\*\*$/.test(c))
+          return <div key={i} style={{color:"#f59e0b",fontWeight:"bold",fontSize:11,
+                                      letterSpacing:"0.1em",marginTop:14,marginBottom:4}}>
+            {c.replace(/\*\*/g,"")}
+          </div>;
+        if (c.startsWith("- "))
+          return <div key={i} style={{display:"flex",gap:6,marginBottom:3,
+                                      fontSize:12,color:"#cbd5e1",lineHeight:"1.6"}}>
+            <span style={{color:"#64748b",flexShrink:0}}>▸</span>
+            <span>{c.slice(2)}</span>
+          </div>;
+        return <div key={i} style={{fontSize:12,color:"#cbd5e1",marginBottom:3,
+                                    lineHeight:"1.7"}}>{c}</div>;
+      })}
+    </div>
+  );
+}
+
+function Dashboard() {
+  const alert  = window.ALERT_DATA  || {};
+  const id     = window.ALERT_ID    || "unknown";
+  const apiUrl = window.API_URL     || "";
+  const sev    = SEV[alert.severity] || SEV.low;
+  const det    = alert.details || {};
+
+  const [reason,  setReason]  = useState("");
+  const [loading, setLoading] = useState(true);
+  const [notes,   setNotes]   = useState("");
+  const [pending, setPending] = useState(null);
+  const [final,   setFinal]   = useState(null);
+
+  useEffect(() => {
+    const prompt =
+      `Alert: ${alert.rule_id} — ${alert.description}\n` +
+      `Source IP: ${alert.srcip} | Agent: ${alert.agent}\n` +
+      `Wazuh level: ${alert.level} | Fired: ${alert.firedtimes}×\n` +
+      `MITRE tactic: ${alert.tactic}\n` +
+      `VirusTotal: ${(det.vt||{}).detail} (${(det.vt||{}).score}/20)\n` +
+      `OTX AlienVault: ${(det.otx||{}).detail} (${(det.otx||{}).score}/20)\n` +
+      `Composite score: ${alert.score}/100 → ${(alert.severity||"").toUpperCase()}\n` +
+      `System action: ${alert.recommended_action}`;
+
+    fetch(`${apiUrl}/ai-reason`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({prompt})
+    })
+    .then(r=>r.json())
+    .then(d=>setReason(d.text||""))
+    .catch(e=>setReason(`Error: ${e.message}`))
+    .finally(()=>setLoading(false));
+  }, []);
+
+  const confirmDecision = () => {
+    fetch(`${apiUrl}/decision/${id}`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:pending, notes})
+    }).then(()=>setFinal(pending));
+    setPending(null);
+  };
+
+  if (final) {
+    const cfg = {
+      accepted:  {label:"Action accepted",     col:"#4ade80"},
+      refused:   {label:"Action refused",      col:"#f87171"},
+      escalated: {label:"Escalated to Tier 2", col:"#f59e0b"},
+    }[final];
+    return (
+      <div style={{minHeight:"100vh",display:"flex",alignItems:"center",
+                   justifyContent:"center",fontFamily:MONO}}>
+        <div style={{textAlign:"center",padding:40}}>
+          <div style={{fontSize:48,marginBottom:16,color:cfg.col}}>
+            {final==="accepted"?"✓":final==="refused"?"✗":"↑"}
+          </div>
+          <div style={{fontSize:18,color:cfg.col,letterSpacing:"0.1em",marginBottom:12}}>{cfg.label}</div>
+          <div style={{color:"#64748b",fontSize:12,marginBottom:6}}>Alert {id} · {new Date().toLocaleTimeString()}</div>
+          {notes && <div style={{color:"#94a3b8",fontSize:12,maxWidth:360,margin:"0 auto",lineHeight:"1.6"}}>"{notes}"</div>}
+        </div>
+      </div>
+    );
+  }
+
+  const ts = alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) : "";
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",minHeight:"100vh"}}>
+
+      {/* Top bar */}
+      <div style={{background:"#0a0d16",borderBottom:"1px solid #1e293b",
+                   padding:"10px 20px",display:"flex",alignItems:"center",
+                   justifyContent:"space-between",flexShrink:0}}>
+        <span style={{fontSize:10,color:"#64748b",letterSpacing:"0.12em"}}>
+          SOC-SOAR · ANALYST REVIEW
+        </span>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <span style={{color:"#475569",fontSize:10}}>{ts}</span>
+          <div style={{background:sev.bg,border:`1px solid ${sev.border}`,color:sev.fg,
+                       padding:"3px 10px",borderRadius:3,fontSize:10,fontWeight:"bold",
+                       letterSpacing:"0.15em"}}>
+            ⚠ {(alert.severity||"").toUpperCase()}
+          </div>
+          <span style={{color:"#334155",fontSize:11}}>{id}</span>
+        </div>
+      </div>
+
+      {/* Two columns */}
+      <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",overflow:"hidden",minHeight:0}}>
+
+        {/* Left — evidence */}
+        <div style={{borderRight:"1px solid #1e293b",overflowY:"auto",padding:20}}>
+
+          {/* Score hero */}
+          <div style={{background:"#0a0d16",border:`1px solid ${sev.border}`,borderRadius:4,
+                       padding:"12px 16px",marginBottom:16,display:"flex",
+                       alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{fontSize:10,color:"#64748b",letterSpacing:"0.1em",marginBottom:2}}>COMPOSITE SCORE</div>
+              <div style={{fontSize:40,fontWeight:"bold",color:sev.fg,lineHeight:1}}>
+                {alert.score}<span style={{fontSize:16,color:"#475569"}}>/100</span>
+              </div>
+            </div>
+            <div style={{textAlign:"right",maxWidth:190}}>
+              <div style={{fontSize:10,color:"#64748b",letterSpacing:"0.1em",marginBottom:4}}>SYSTEM ACTION</div>
+              <div style={{fontSize:11,color:"#f59e0b",lineHeight:"1.5"}}>{alert.recommended_action}</div>
+            </div>
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <SectionHead label="Alert details" accent="#60a5fa"/>
+            <KV label="Rule ID"      value={alert.rule_id}      vc="#60a5fa"/>
+            <KV label="Description"  value={alert.description}/>
+            <KV label="Agent"        value={alert.agent}        vc="#a78bfa"/>
+            <KV label="Source IP"    value={alert.srcip}        vc="#f87171"/>
+            <KV label="MITRE tactic" value={alert.tactic}       vc="#fb923c"/>
+            <KV label="Fired"        value={`${alert.firedtimes}×`}
+               vc={alert.firedtimes>10?"#ef4444":"#e2e8f0"}/>
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <SectionHead label="Threat intelligence" accent="#a78bfa"/>
+            <div style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
+                <span style={{color:"#64748b"}}>VirusTotal</span>
+                <span style={{color:"#f87171"}}>{(det.vt||{}).detail}</span>
+              </div>
+              <div style={{height:6,background:"#1e293b",borderRadius:3,overflow:"hidden"}}>
+                <div style={{width:`${Math.min(((alert.vt_malicious_ip||0)/40)*100,100)}%`,
+                             height:"100%",background:"linear-gradient(90deg,#f59e0b,#ef4444)",borderRadius:3}}/>
+              </div>
+              <div style={{fontSize:10,color:"#475569",marginTop:2}}>{alert.vt_malicious_ip||0} engines flagged</div>
+            </div>
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4}}>
+                <span style={{color:"#64748b"}}>OTX AlienVault</span>
+                <span style={{color:"#fb923c"}}>{(det.otx||{}).detail}</span>
+              </div>
+              <div style={{height:6,background:"#1e293b",borderRadius:3,overflow:"hidden"}}>
+                <div style={{width:`${Math.min(((alert.otx_pulses_ip||0)/10)*100,100)}%`,
+                             height:"100%",background:"linear-gradient(90deg,#f59e0b,#fb923c)",borderRadius:3}}/>
+              </div>
+              <div style={{fontSize:10,color:"#475569",marginTop:2}}>{alert.otx_pulses_ip||0} pulses</div>
+            </div>
+          </div>
+
+          <div>
+            <SectionHead label="Scoring breakdown" accent="#f59e0b"/>
+            <Bar score={(det.wazuh||{}).score||0} label="Wazuh level"    detail={(det.wazuh||{}).detail}/>
+            <Bar score={(det.vt||{}).score||0}    label="VirusTotal"     detail={(det.vt||{}).detail}/>
+            <Bar score={(det.otx||{}).score||0}   label="OTX AlienVault" detail={(det.otx||{}).detail}/>
+            <Bar score={(det.mitre||{}).score||0} label="MITRE ATT&CK"   detail={(det.mitre||{}).detail}/>
+            <Bar score={(det.freq||{}).score||0}  label="Frequency"      detail={(det.freq||{}).detail}/>
+            {det.bonus>0 && (
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,
+                           color:"#f59e0b",padding:"6px 0",borderTop:"1px solid #1e293b",marginTop:4}}>
+                <span>Correlation bonus (3+ high factors)</span>
+                <span>+{det.bonus}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right — AI + decision */}
+        <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div style={{flex:1,overflowY:"auto",padding:20}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                         marginBottom:10,paddingBottom:6,borderBottom:"1px solid #1e293b"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:3,height:14,background:"#22d3ee",borderRadius:2}}/>
+                <span style={{fontSize:10,color:"#22d3ee",letterSpacing:"0.15em",
+                              textTransform:"uppercase",fontWeight:"bold"}}>
+                  AI Threat Reasoning
+                </span>
+              </div>
+              {loading && (
+                <span style={{fontSize:10,color:"#64748b",animation:"blink 1.2s infinite"}}>
+                  analyzing…
+                </span>
+              )}
+            </div>
+
+            {loading ? (
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",
+                           justifyContent:"center",padding:"40px 0",gap:12}}>
+                <div style={{width:24,height:24,border:"2px solid #1e293b",
+                             borderTop:"2px solid #22d3ee",borderRadius:"50%",
+                             animation:"spin 0.8s linear infinite"}}/>
+                <span style={{color:"#64748b",fontSize:11,letterSpacing:"0.08em"}}>
+                  Analyzing threat indicators…
+                </span>
+              </div>
+            ) : <AiText text={reason}/>}
+          </div>
+
+          {/* Decision panel */}
+          <div style={{borderTop:"1px solid #1e293b",padding:"14px 20px",
+                       background:"#0a0d16",flexShrink:0}}>
+            <div style={{fontSize:10,color:"#64748b",letterSpacing:"0.1em",marginBottom:8}}>
+              ANALYST DECISION
+            </div>
+            <textarea
+              value={notes}
+              onChange={e=>setNotes(e.target.value)}
+              placeholder="Add analyst notes (optional)…"
+              style={{width:"100%",background:"#0d1117",border:"1px solid #1e293b",
+                      color:"#94a3b8",padding:8,fontSize:11,fontFamily:MONO,
+                      borderRadius:3,resize:"vertical",minHeight:52,marginBottom:10}}
+            />
+
+            {pending ? (
+              <div style={{background:"#0d1117",border:"1px solid #f59e0b",borderRadius:4,padding:12}}>
+                <div style={{fontSize:11,color:"#f59e0b",marginBottom:10}}>
+                  Confirm:{" "}
+                  {pending==="accepted"?"accept and execute"
+                   :pending==="refused"?"refuse this action"
+                   :"escalate to Tier 2"}?
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={confirmDecision}
+                    style={{flex:1,padding:"8px 0",border:"none",color:"#fff",fontSize:11,
+                            borderRadius:3,fontFamily:MONO,
+                            background:pending==="accepted"?"#15803d"
+                                      :pending==="refused"?"#991b1b":"#92400e"}}>
+                    Confirm
+                  </button>
+                  <button onClick={()=>setPending(null)}
+                    style={{flex:1,padding:"8px 0",background:"transparent",
+                            border:"1px solid #334155",color:"#64748b",
+                            fontSize:11,borderRadius:3,fontFamily:MONO}}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{display:"flex",gap:8}}>
+                {[
+                  {key:"accepted", label:"✓ Accept",   bg:"rgba(22,163,74,.15)", border:"rgba(22,163,74,.5)",   col:"#4ade80"},
+                  {key:"refused",  label:"✗ Refuse",   bg:"rgba(220,38,38,.15)", border:"rgba(220,38,38,.5)",   col:"#f87171"},
+                  {key:"escalated",label:"↑ Escalate", bg:"rgba(245,158,11,.15)",border:"rgba(245,158,11,.5)", col:"#fbbf24"},
+                ].map(btn => (
+                  <button key={btn.key} onClick={()=>setPending(btn.key)}
+                    style={{flex:1,padding:10,background:btn.bg,border:`1px solid ${btn.border}`,
+                            color:btn.col,fontSize:11,borderRadius:3,fontFamily:MONO,
+                            letterSpacing:"0.08em"}}>
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Dashboard/>);
+</script>
+</body>
+</html>
