@@ -56,9 +56,6 @@ Wazuh 4.14.4 · Shuffle (SOAR) · TheHive 5 + Cortex · Python (Score API, Event
 
 This platform is the end-of-year project (*projet de fin d'année*, 2025–2026) of the **Network Engineering and Information Security** track at **ENIAD** — École Nationale de l'Intelligence Artificielle et du Digital, Berkane (Université Mohammed Premier, Oujda, Morocco).
 
-**Authors:** AIT MBAREK Karim · Idchaoudi Youssef · TAHRI Mohammed
-**Supervisors:** Pr. Manale Boughanja (academic) · Ms. Zineb Bakraouy (co-supervisor)
-
 The full academic report (80 pages, French) is included as [`rapport_academique.pdf`](rapport_academique.pdf).
 
 ## Repository
@@ -80,4 +77,4 @@ docs/                        Screenshots and diagrams
 
 Give your assistant [`everythingunee2know-giveittoai.md`](everythingunee2know-giveittoai.md). It contains the complete context of the project (architecture, every component, payloads, thresholds, known issues and how to recreate the missing files), so it can guide you through the deployment and help you rebuild what the repository does not include.
 
-> No secrets are stored in this repository. Every key is a placeholder such as `<GROQ_API_KEY>`. Use your own keys and never commit them.
+> No secrets are stored in this repository. Every key is a placeholder such as `<_API_KEY>`. Use your own keys and never commit them.
